@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Biểu Diễn Miền Nghiệm Bất Phương Trình Mobile</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- MathJS for expression parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.8.0/math.js"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+        
+        * {
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            overflow: hidden;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+        }
+
+        canvas {
+            touch-action: none; /* Prevent browser scrolling while dragging canvas */
+        }
+
+        /* Custom Scrollbars */
+        ::-webkit-scrollbar {
+            width: 4px;
+            height: 4px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.6);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 4px;
+        }
+
+        /* Touch Button Ripple Effect */
+        .touch-btn {
+            min-height: 44px;
+            min-width: 44px;
+            transition: transform 0.1s active, background-color 0.15s ease;
+        }
+        .touch-btn:active {
+            transform: scale(0.95);
+        }
+
+        /* Virtual Keypad styling */
+        .keypad-btn {
+            min-height: 40px;
+            font-weight: 600;
+            border-radius: 8px;
+            background-color: #1e293b;
+            color: #f1f5f9;
+            border: 1px solid #334155;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .keypad-btn:active {
+            background-color: #475569;
+            transform: scale(0.94);
+        }
+        
+        /* Drawer animation */
+        .drawer-transition {
+            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 flex flex-col h-screen w-screen overflow-hidden">
+
+    <header class="bg-slate-900 border-b border-slate-800 px-4 py-2.5 flex items-center justify-between shrink-0 z-20 shadow-md">
+        <div class="flex items-center gap-2.5">
+            <div class="bg-indigo-600 w-9 h-9 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20 text-white font-bold text-lg">
+                <i class="fa-solid fa-chart-pie text-sm"></i>
+            </div>
+            <div>
+                <h1 class="text-sm font-bold bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-transparent">
+                    Graph Inequality 2D
+                </h1>
+                <p class="text-[10px] text-slate-400 font-medium">Toán BPT & Hệ BPT (Mobile Ready)</p>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-1.5">
+            <button id="btnToggleKeyboard" class="touch-btn px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs font-medium text-slate-300 border border-slate-700 flex items-center gap-1.5">
+                <i class="fa-solid fa-keyboard text-indigo-400"></i>
+                <span class="hidden sm:inline">Bàn phím</span>
+            </button>
+            <button id="btnResetViewHeader" class="touch-btn w-9 h-9 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 flex items-center justify-center">
+                <i class="fa-solid fa-crosshairs text-cyan-400"></i>
+            </button>
+        </div>
+    </header>
+
+    <main class="flex-1 relative overflow-hidden bg-slate-950 flex flex-col">
+
+        <!-- HTML5 Canvas Viewport -->
+        <canvas id="graphCanvas" class="w-full h-full block cursor-grab active:cursor-grabbing"></canvas>
+
+        <!-- Top Status Bar overlay -->
+        <div class="absolute top-3 left-3 right-3 flex justify-between items-start pointer-events-none z-10">
+            <!-- Coordinates indicator -->
+            <div id="coordsIndicator" class="pointer-events-auto bg-slate-900/90 backdrop-blur border border-slate-800 px-3 py-1.5 rounded-xl text-xs font-mono text-slate-200 shadow-xl flex items-center gap-2">
+                <i class="fa-solid fa-location-dot text-rose-500 text-xs animate-pulse"></i>
+                <span id="coordsText">Chạm vào đồ thị...</span>
+            </div>
+
+            <!-- Quick Zoom Buttons -->
+            <div class="pointer-events-auto flex flex-col gap-2">
+                <button id="btnZoomIn" class="touch-btn w-10 h-10 bg-slate-900/90 backdrop-blur border border-slate-800 rounded-xl flex items-center justify-center text-slate-200 shadow-xl text-base active:bg-slate-800">
+                    <i class="fa-solid fa-plus"></i>
+                </button>
+                <button id="btnZoomOut" class="touch-btn w-10 h-10 bg-slate-900/90 backdrop-blur border border-slate-800 rounded-xl flex items-center justify-center text-slate-200 shadow-xl text-base active:bg-slate-800">
+                    <i class="fa-solid fa-minus"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Point Inspection Result Toast Banner -->
+        <div id="pointResultToast" class="absolute top-16 left-3 right-3 pointer-events-auto transition-all duration-300 opacity-0 translate-y-[-10px] hidden z-10">
+            <div class="bg-slate-900/95 backdrop-blur border border-slate-800 rounded-2xl p-3 shadow-2xl flex items-center justify-between gap-3">
+                <div class="flex items-center gap-3">
+                    <div id="toastIcon" class="w-8 h-8 rounded-xl flex items-center justify-center text-base shrink-0 bg-slate-800">
+                        <i class="fa-solid fa-circle-info"></i>
+                    </div>
+                    <div class="text-xs">
+                        <p id="toastCoords" class="font-mono font-semibold text-slate-300">Điểm (0, 0)</p>
+                        <p id="toastStatus" class="font-medium text-slate-400">Kiểm tra miền nghiệm</p>
+                    </div>
+                </div>
+                <button id="btnCloseToast" class="text-slate-400 hover:text-white p-1">
+                    <i class="fa-solid fa-xmark text-base"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Collapsible Bottom Sheet Drawer -->
+        <div id="bottomDrawer" class="drawer-transition absolute bottom-0 left-0 right-0 z-20 bg-slate-900/95 backdrop-blur border-t border-slate-800 rounded-t-3xl shadow-2xl flex flex-col max-h-[80vh]">
+            
+            <!-- Drawer Handle Bar (Swipeable / Clickable) -->
+            <div id="drawerHandle" class="py-2.5 px-4 cursor-pointer flex flex-col items-center justify-center border-b border-slate-800/50 shrink-0">
+                <div class="w-12 h-1.5 bg-slate-700 rounded-full mb-1"></div>
+                <div class="w-full flex items-center justify-between text-xs text-slate-400">
+                    <span id="ineqCountBadge" class="font-semibold text-indigo-400 flex items-center gap-1.5">
+                        <i class="fa-solid fa-layer-group text-xs"></i> 2 Bất phương trình
+                    </span>
+                    <span class="text-[11px] font-medium flex items-center gap-1 text-slate-400">
+                        <span id="drawerStateText">Chạm để đóng</span>
+                        <i id="drawerChevron" class="fa-solid fa-chevron-down text-[10px] transition-transform"></i>
+                    </span>
+                </div>
+            </div>
+
+            <!-- Drawer Scrollable Content -->
+            <div id="drawerContent" class="p-4 overflow-y-auto space-y-4">
+
+                <!-- Preset Quick Buttons -->
+                <div>
+                    <label class="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">
+                        <i class="fa-solid fa-wand-magic-sparkles text-amber-400 mr-1"></i> Ví dụ mẫu nhanh
+                    </label>
+                    <div class="flex gap-2 overflow-x-auto pb-1 text-xs">
+                        <button class="preset-btn shrink-0 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 font-mono" data-preset="2x + y <= 4">
+                            2x + y ≤ 4
+                        </button>
+                        <button class="preset-btn shrink-0 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 font-mono" data-preset="x >= 0&#10;y >= 0&#10;x + y <= 4">
+                            Hệ tam giác
+                        </button>
+                        <button class="preset-btn shrink-0 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 font-mono" data-preset="x^2 + y^2 <= 16">
+                            Hình tròn x²+y²≤16
+                        </button>
+                        <button class="preset-btn shrink-0 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 font-mono" data-preset="y >= x^2 - 3">
+                            Parabol y ≥ x²-3
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Input Textarea & Actions -->
+                <div class="space-y-2">
+                    <div class="flex justify-between items-center">
+                        <label class="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                            Nhập BPT (Mỗi dòng 1 BPT)
+                        </label>
+                        <button id="btnClearInput" class="text-xs text-rose-400 hover:text-rose-300 font-medium flex items-center gap-1">
+                            <i class="fa-solid fa-trash-can text-[10px]"></i> Xóa
+                        </button>
+                    </div>
+                    <textarea id="inequalityInput" rows="3" class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm font-mono text-cyan-300 focus:outline-none focus:border-indigo-500 transition shadow-inner" placeholder="2x + y <= 4&#10;x - y > 0"></textarea>
+                    
+                    <p id="errorMessage" class="text-xs text-rose-400 hidden flex items-center gap-1.5 font-medium">
+                        <i class="fa-solid fa-triangle-exclamation"></i> <span></span>
+                    </p>
+
+                    <button id="btnRender" class="touch-btn w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-2.5 px-4 rounded-xl shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2 text-sm">
+                        <i class="fa-solid fa-chart-line"></i> Vẽ & Biểu Diễn Miền Nghiệm
+                    </button>
+                </div>
+
+                <!-- Legend / Instructions Footer -->
+                <div class="grid grid-cols-2 gap-2 text-[11px] text-slate-400 bg-slate-950/60 p-3 rounded-xl border border-slate-800/80">
+                    <div class="flex items-center gap-2">
+                        <span class="w-5 h-0 border-b-2 border-indigo-400"></span>
+                        <span>Nét liền: <code class="text-indigo-300">&le;</code>, <code class="text-indigo-300">&ge;</code></span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="w-5 h-0 border-b-2 border-dashed border-indigo-400"></span>
+                        <span>Nét đứt: <code class="text-indigo-300">&lt;</code>, <code class="text-indigo-300">&gt;</code></span>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+
+        <!-- Mobile Math Virtual Keyboard Sheet -->
+        <div id="virtualKeypad" class="drawer-transition absolute bottom-0 left-0 right-0 z-30 bg-slate-900 border-t border-slate-800 p-3 shadow-2xl translate-y-full flex flex-col gap-2">
+            <div class="flex justify-between items-center pb-1 border-b border-slate-800">
+                <span class="text-xs font-semibold text-slate-400 flex items-center gap-1.5">
+                    <i class="fa-solid fa-keyboard text-indigo-400"></i> Bàn Phím Toán Học
+                </span>
+                <button id="btnCloseKeyboard" class="touch-btn text-xs text-slate-400 hover:text-white px-2 py-1 rounded">
+                    <i class="fa-solid fa-chevron-down mr-1"></i>Đóng
+                </button>
+            </div>
+            
+            <!-- Keypad Grid -->
+            <div class="grid grid-cols-5 gap-1.5 text-sm font-mono">
+                <button class="keypad-btn" data-insert="x">x</button>
+                <button class="keypad-btn" data-insert="y">y</button>
+                <button class="keypad-btn text-indigo-400 font-bold" data-insert=" <= ">&le;</button>
+                <button class="keypad-btn text-indigo-400 font-bold" data-insert=" >= ">&ge;</button>
+                <button class="keypad-btn text-rose-400" id="btnKeypadBackspace"><i class="fa-solid fa-backspace"></i></button>
+
+                <button class="keypad-btn" data-insert="^2">x²</button>
+                <button class="keypad-btn" data-insert="^">xⁿ</button>
+                <button class="keypad-btn text-indigo-400 font-bold" data-insert=" < ">&lt;</button>
+                <button class="keypad-btn text-indigo-400 font-bold" data-insert=" > ">&gt;</button>
+                <button class="keypad-btn text-amber-400" id="btnKeypadClear">C</button>
+
+                <button class="keypad-btn" data-insert="+">+</button>
+                <button class="keypad-btn" data-insert="-">-</button>
+                <button class="keypad-btn" data-insert="*">&times;</button>
+                <button class="keypad-btn" data-insert="/">&divide;</button>
+                <button class="keypad-btn text-indigo-400 font-bold" data-insert="=">=</button>
+
+                <button class="keypad-btn" data-insert="(">(</button>
+                <button class="keypad-btn" data-insert=")">)</button>
+                <button class="keypad-btn" data-insert="0">0</button>
+                <button class="keypad-btn" data-insert=".">.</button>
+                <button class="keypad-btn bg-indigo-600 text-white col-span-1" id="btnKeypadEnter">
+                    <i class="fa-solid fa-check"></i>
+                </button>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        // --- Core Mobile Application Engine ---
+
+        const canvas = document.getElementById('graphCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Viewport Transformation State
+        let scale = 35; // Pixels per unit
+        let offsetX = 0;
+        let offsetY = 0;
+
+        // Parsed inequality objects
+        let parsedInequalities = [];
+
+        // Touch Interaction State
+        let isTouching = false;
+        let touchStartDist = 0;
+        let startScale = scale;
+        let touchStartPos = { x: 0, y: 0 };
+        let startOffset = { x: 0, y: 0 };
+        let lastTapTime = 0;
+
+        // Checked Point
+        let currentCheckedPoint = null;
+
+        // Drawer State
+        let isDrawerOpen = true;
+
+        // DOM Elements
+        const inequalityInput = document.getElementById('inequalityInput');
+        const btnRender = document.getElementById('btnRender');
+        const btnClearInput = document.getElementById('btnClearInput');
+        const errorMessage = document.getElementById('errorMessage');
+        const coordsText = document.getElementById('coordsText');
+        const bottomDrawer = document.getElementById('bottomDrawer');
+        const drawerHandle = document.getElementById('drawerHandle');
+        const drawerChevron = document.getElementById('drawerChevron');
+        const drawerStateText = document.getElementById('drawerStateText');
+        const ineqCountBadge = document.getElementById('ineqCountBadge');
+        const virtualKeypad = document.getElementById('virtualKeypad');
+        const btnToggleKeyboard = document.getElementById('btnToggleKeyboard');
+        const btnCloseKeyboard = document.getElementById('btnCloseKeyboard');
+        const pointResultToast = document.getElementById('pointResultToast');
+        const toastCoords = document.getElementById('toastCoords');
+        const toastStatus = document.getElementById('toastStatus');
+        const toastIcon = document.getElementById('toastIcon');
+
+        // --- Canvas Resizing ---
+        function resizeCanvas() {
+            const rect = canvas.parentElement.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+            if (offsetX === 0 && offsetY === 0) {
+                offsetX = canvas.width / 2;
+                offsetY = canvas.height / 2;
+            }
+            render();
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+
+        // --- Math & Coordinate Helpers ---
+        function toScreenX(mathX) { return offsetX + mathX * scale; }
+        function toScreenY(mathY) { return offsetY - mathY * scale; }
+        function toMathX(screenX) { return (screenX - offsetX) / scale; }
+        function toMathY(screenY) { return (offsetY - screenY) / scale; }
+
+        function preprocessExpression(str) {
+            return str
+                .replace(/(\d)([a-zA-Z])/g, '$1*$2')
+                .replace(/([a-zA-Z])(\d)/g, '$1*$2')
+                .replace(/\)\(/g, ')*(')
+                .trim();
+        }
+
+        function parseInequalityLine(line) {
+            line = line.trim();
+            if (!line) return null;
+
+            const operators = ['<=', '>=', '<', '>'];
+            let op = null;
+            for (let possibleOp of operators) {
+                if (line.includes(possibleOp)) {
+                    op = possibleOp;
+                    break;
+                }
+            }
+
+            if (!op) {
+                throw new Error(`Cần có dấu <, >, <= hoặc >=: "${line}"`);
+            }
+
+            const parts = line.split(op);
+            if (parts.length !== 2) throw new Error(`Cú pháp không hợp lệ: "${line}"`);
+
+            const lhsStr = preprocessExpression(parts[0]);
+            const rhsStr = preprocessExpression(parts[1]);
+
+            const lhsCompiled = math.compile(lhsStr);
+            const rhsCompiled = math.compile(rhsStr);
+
+            const testFn = (x, y) => {
+                const scope = { x, y };
+                const lhsVal = lhsCompiled.evaluate(scope);
+                const rhsVal = rhsCompiled.evaluate(scope);
+                switch (op) {
+                    case '<=': return lhsVal <= rhsVal;
+                    case '>=': return lhsVal >= rhsVal;
+                    case '<':  return lhsVal < rhsVal;
+                    case '>':  return lhsVal > rhsVal;
+                    default: return false;
+                }
+            };
+
+            const diffCompiled = math.compile(`(${lhsStr}) - (${rhsStr})`);
+            const diffFn = (x, y) => diffCompiled.evaluate({ x, y });
+
+            return {
+                raw: line,
+                op: op,
+                isStrict: op === '<' || op === '>',
+                test: testFn,
+                diff: diffFn
+            };
+        }
+
+        function drawGrid() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            let step = 1;
+            if (scale < 20) step = 5;
+            if (scale < 8) step = 10;
+            if (scale > 70) step = 0.5;
+
+            const minX = toMathX(0);
+            const maxX = toMathX(canvas.width);
+            const minY = toMathY(canvas.height);
+            const maxY = toMathY(0);
+
+            const startX = Math.floor(minX / step) * step;
+            const endX = Math.ceil(maxX / step) * step;
+            const startY = Math.floor(minY / step) * step;
+            const endY = Math.ceil(maxY / step) * step;
+
+            // Grid lines
+            ctx.strokeStyle = '#1e293b';
+            ctx.lineWidth = 1;
+            ctx.font = '10px Plus Jakarta Sans';
+            ctx.fillStyle = '#64748b';
+
+            for (let x = startX; x <= endX; x += step) {
+                const sx = toScreenX(x);
+                ctx.beginPath();
+                ctx.moveTo(sx, 0);
+                ctx.lineTo(sx, canvas.height);
+                ctx.stroke();
+
+                if (Math.abs(x) > 1e-6) {
+                    const sy = Math.max(15, Math.min(canvas.height - 10, offsetY + 15));
+                    ctx.fillText(x.toString(), sx - 4, sy);
+                }
+            }
+
+            for (let y = startY; y <= endY; y += step) {
+                const sy = toScreenY(y);
+                ctx.beginPath();
+                ctx.moveTo(0, sy);
+                ctx.lineTo(canvas.width, sy);
+                ctx.stroke();
+
+                if (Math.abs(y) > 1e-6) {
+                    const sx = Math.max(10, Math.min(canvas.width - 20, offsetX + 5));
+                    ctx.fillText(y.toString(), sx, sy + 3);
+                }
+            }
+
+            // Main Axes
+            ctx.strokeStyle = '#475569';
+            ctx.lineWidth = 1.5;
+
+            ctx.beginPath();
+            ctx.moveTo(0, offsetY); ctx.lineTo(canvas.width, offsetY); ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(offsetX, 0); ctx.lineTo(offsetX, canvas.height); ctx.stroke();
+
+            ctx.fillText('0', offsetX - 10, offsetY + 12);
+        }
+
+        function drawSolutionRegion() {
+            if (parsedInequalities.length === 0) return;
+
+            const step = 4; // Pixel sampling resolution
+            const width = canvas.width;
+            const height = canvas.height;
+
+            const imgData = ctx.createImageData(width, height);
+            const data = imgData.data;
+
+            for (let py = 0; py < height; py += step) {
+                const my = toMathY(py);
+                for (let px = 0; px < width; px += step) {
+                    const mx = toMathX(px);
+
+                    let satisfiesAll = true;
+                    for (let ineq of parsedInequalities) {
+                        try {
+                            if (!ineq.test(mx, my)) {
+                                satisfiesAll = false;
+                                break;
+                            }
+                        } catch (e) {
+                            satisfiesAll = false; break;
+                        }
+                    }
+
+                    if (satisfiesAll) {
+                        for (let dy = 0; dy < step && (py + dy) < height; dy++) {
+                            for (let dx = 0; dx < step && (px + dx) < width; dx++) {
+                                const index = ((py + dy) * width + (px + dx)) * 4;
+                                data[index] = 99;     // R
+                                data[index + 1] = 102;// G
+                                data[index + 2] = 241;// B
+                                data[index + 3] = 100;// Alpha
+                            }
+                        }
+                    }
+                }
+            }
+
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = width;
+            tempCanvas.height = height;
+            tempCanvas.getContext('2d').putImageData(imgData, 0, 0);
+            ctx.drawImage(tempCanvas, 0, 0);
+        }
+
+        function drawBoundaries() {
+            if (parsedInequalities.length === 0) return;
+
+            parsedInequalities.forEach(ineq => {
+                ctx.save();
+                ctx.strokeStyle = '#818cf8';
+                ctx.lineWidth = 2;
+
+                if (ineq.isStrict) {
+                    ctx.setLineDash([6, 5]);
+                } else {
+                    ctx.setLineDash([]);
+                }
+
+                const gridStep = 4;
+                for (let py = 0; py < canvas.height; py += gridStep) {
+                    for (let px = 0; px < canvas.width; px += gridStep) {
+                        const x1 = toMathX(px);
+                        const y1 = toMathY(py);
+                        const x2 = toMathX(px + gridStep);
+                        const y2 = toMathY(py + gridStep);
+
+                        try {
+                            const valTL = ineq.diff(x1, y1);
+                            const valTR = ineq.diff(x2, y1);
+                            const valBL = ineq.diff(x1, y2);
+
+                            if (Math.sign(valTL) !== Math.sign(valTR) || Math.sign(valTL) !== Math.sign(valBL)) {
+                                ctx.beginPath();
+                                ctx.moveTo(px, py);
+                                ctx.lineTo(px + gridStep, py + gridStep);
+                                ctx.stroke();
+                            }
+                        } catch (e) {}
+                    }
+                }
+                ctx.restore();
+            });
+        }
+
+        function drawCheckedPoint() {
+            if (!currentCheckedPoint) return;
+
+            const sx = toScreenX(currentCheckedPoint.x);
+            const sy = toScreenY(currentCheckedPoint.y);
+
+            let isValid = parsedInequalities.length > 0;
+            for (let ineq of parsedInequalities) {
+                try {
+                    if (!ineq.test(currentCheckedPoint.x, currentCheckedPoint.y)) {
+                        isValid = false; break;
+                    }
+                } catch(e) { isValid = false; }
+            }
+
+            // Outer pulse
+            ctx.beginPath();
+            ctx.arc(sx, sy, 9, 0, Math.PI * 2);
+            ctx.fillStyle = isValid ? 'rgba(34, 197, 94, 0.35)' : 'rgba(244, 63, 94, 0.35)';
+            ctx.fill();
+
+            // Inner dot
+            ctx.beginPath();
+            ctx.arc(sx, sy, 4.5, 0, Math.PI * 2);
+            ctx.fillStyle = isValid ? '#22c55e' : '#f43f5e';
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 1.5;
+            ctx.fill();
+            ctx.stroke();
+
+            // Update Point Inspection Toast
+            toastCoords.textContent = `Tọa độ: (${currentCheckedPoint.x.toFixed(2)}, ${currentCheckedPoint.y.toFixed(2)})`;
+            if (parsedInequalities.length === 0) {
+                toastStatus.textContent = 'Chưa có bất phương trình nào';
+                toastIcon.className = 'w-8 h-8 rounded-xl flex items-center justify-center text-base shrink-0 bg-slate-800 text-amber-400';
+                toastIcon.innerHTML = '<i class="fa-solid fa-circle-question"></i>';
+            } else if (isValid) {
+                toastStatus.textContent = 'Thuộc Miền Nghiệm ✓';
+                toastIcon.className = 'w-8 h-8 rounded-xl flex items-center justify-center text-base shrink-0 bg-emerald-950 text-emerald-400 border border-emerald-800';
+                toastIcon.innerHTML = '<i class="fa-solid fa-check"></i>';
+            } else {
+                toastStatus.textContent = 'KHÔNG thuộc Miền Nghiệm ✕';
+                toastIcon.className = 'w-8 h-8 rounded-xl flex items-center justify-center text-base shrink-0 bg-rose-950 text-rose-400 border border-rose-800';
+                toastIcon.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+            }
+
+            pointResultToast.classList.remove('hidden');
+            setTimeout(() => {
+                pointResultToast.classList.remove('opacity-0', 'translate-y-[-10px]');
+            }, 10);
+        }
+
+        function render() {
+            drawGrid();
+            drawSolutionRegion();
+            drawBoundaries();
+            drawCheckedPoint();
+        }
+
+        function getTouchDistance(touches) {
+            const dx = touches[0].clientX - touches[1].clientX;
+            const dy = touches[0].clientY - touches[1].clientY;
+            return Math.sqrt(dx * dx + dy * dy);
+        }
+
+        function getTouchCenter(touches) {
+            return {
+                x: (touches[0].clientX + touches[1].clientX) / 2,
+                y: (touches[0].clientY + touches[1].clientY) / 2
+            };
+        }
+
+        // Touch Start
+        canvas.addEventListener('touchstart', (e) => {
+            const now = Date.now();
+            const rect = canvas.getBoundingClientRect();
+
+            if (e.touches.length === 1) {
+                // Double Tap to reset view
+                if (now - lastTapTime < 300) {
+                    scale = 35;
+                    offsetX = canvas.width / 2;
+                    offsetY = canvas.height / 2;
+                    render();
+                    lastTapTime = 0;
+                    return;
+                }
+                lastTapTime = now;
+
+                isTouching = true;
+                touchStartPos = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                startOffset = { x: offsetX, y: offsetY };
+            } else if (e.touches.length === 2) {
+                // Pinch to Zoom initial state
+                isTouching = false;
+                touchStartDist = getTouchDistance(e.touches);
+                startScale = scale;
+                const center = getTouchCenter(e.touches);
+                touchStartPos = { x: center.x - rect.left, y: center.y - rect.top };
+                startOffset = { x: offsetX, y: offsetY };
+            }
+        }, { passive: true });
+
+        // Touch Move
+        canvas.addEventListener('touchmove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+
+            if (e.touches.length === 1 && isTouching) {
+                // Pan / Drag
+                const dx = e.touches[0].clientX - touchStartPos.x;
+                const dy = e.touches[0].clientY - touchStartPos.y;
+                offsetX = startOffset.x + dx;
+                offsetY = startOffset.y + dy;
+                render();
+            } else if (e.touches.length === 2) {
+                // Pinch Zoom
+                const dist = getTouchDistance(e.touches);
+                if (touchStartDist > 0) {
+                    const zoomFactor = dist / touchStartDist;
+                    const newScale = Math.max(5, Math.min(300, startScale * zoomFactor));
+                    
+                    const center = getTouchCenter(e.touches);
+                    const cx = center.x - rect.left;
+                    const cy = center.y - rect.top;
+
+                    offsetX = cx - (cx - startOffset.x) * (newScale / startScale);
+                    offsetY = cy - (cy - startOffset.y) * (newScale / startScale);
+                    scale = newScale;
+                    render();
+                }
+            }
+        }, { passive: true });
+
+        // Touch End -> Point Selection
+        canvas.addEventListener('touchend', (e) => {
+            if (e.touches.length === 0) {
+                if (isTouching) {
+                    const touch = e.changedTouches[0];
+                    const dx = Math.abs(touch.clientX - touchStartPos.x);
+                    const dy = Math.abs(touch.clientY - touchStartPos.y);
+
+                    // If tap without significant drag
+                    if (dx < 8 && dy < 8) {
+                        const rect = canvas.getBoundingClientRect();
+                        const clickX = touch.clientX - rect.left;
+                        const clickY = touch.clientY - rect.top;
+
+                        const mx = parseFloat(toMathX(clickX).toFixed(2));
+                        const my = parseFloat(toMathY(clickY).toFixed(2));
+
+                        currentCheckedPoint = { x: mx, y: my };
+                        coordsText.textContent = `Point: (${mx}, ${my})`;
+                        render();
+                    }
+                }
+                isTouching = false;
+                touchStartDist = 0;
+            }
+        });
+
+        // Mouse Fallbacks for Desktop testing
+        let isMouseDown = false;
+        canvas.addEventListener('mousedown', (e) => {
+            isMouseDown = true;
+            touchStartPos = { x: e.clientX, y: e.clientY };
+            startOffset = { x: offsetX, y: offsetY };
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mx = toMathX(e.clientX - rect.left);
+            const my = toMathY(e.clientY - rect.top);
+            coordsText.textContent = `x: ${mx.toFixed(2)}, y: ${my.toFixed(2)}`;
+
+            if (isMouseDown) {
+                offsetX = startOffset.x + (e.clientX - touchStartPos.x);
+                offsetY = startOffset.y + (e.clientY - touchStartPos.y);
+                render();
+            }
+        });
+
+        canvas.addEventListener('mouseup', (e) => {
+            if (isMouseDown) {
+                const dx = Math.abs(e.clientX - touchStartPos.x);
+                const dy = Math.abs(e.clientY - touchStartPos.y);
+                if (dx < 5 && dy < 5) {
+                    const rect = canvas.getBoundingClientRect();
+                    const mx = parseFloat(toMathX(e.clientX - rect.left).toFixed(2));
+                    const my = parseFloat(toMathY(e.clientY - rect.top).toFixed(2));
+                    currentCheckedPoint = { x: mx, y: my };
+                    render();
+                }
+            }
+            isMouseDown = false;
+        });
+
+        canvas.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            const factor = e.deltaY < 0 ? 1.15 : 0.85;
+            scale = Math.max(5, Math.min(300, scale * factor));
+            render();
+        }, { passive: false });
+
+        function updateInequalities() {
+            errorMessage.classList.add('hidden');
+            const lines = inequalityInput.value.split('\n');
+            const parsed = [];
+
+            try {
+                for (let line of lines) {
+                    const ineq = parseInequalityLine(line);
+                    if (ineq) parsed.push(ineq);
+                }
+                parsedInequalities = parsed;
+                ineqCountBadge.innerHTML = `<i class="fa-solid fa-layer-group text-xs"></i> ${parsed.length} Bất phương trình`;
+                render();
+
+                // Collapse drawer on successful render on small screen
+                if (window.innerWidth < 640 && isDrawerOpen) {
+                    toggleDrawer(false);
+                }
+            } catch (err) {
+                errorMessage.querySelector('span').textContent = err.message;
+                errorMessage.classList.remove('hidden');
+            }
+        }
+
+        btnRender.addEventListener('click', updateInequalities);
+
+        btnClearInput.addEventListener('click', () => {
+            inequalityInput.value = '';
+            parsedInequalities = [];
+            currentCheckedPoint = null;
+            ineqCountBadge.innerHTML = `<i class="fa-solid fa-layer-group text-xs"></i> 0 Bất phương trình`;
+            pointResultToast.classList.add('hidden');
+            render();
+        });
+
+        // Preset buttons
+        document.querySelectorAll('.preset-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                inequalityInput.value = btn.dataset.preset;
+                updateInequalities();
+            });
+        });
+
+        // Zoom Buttons
+        document.getElementById('btnZoomIn').addEventListener('click', () => { scale *= 1.25; render(); });
+        document.getElementById('btnZoomOut').addEventListener('click', () => { scale /= 1.25; render(); });
+        document.getElementById('btnResetViewHeader').addEventListener('click', () => {
+            scale = 35;
+            offsetX = canvas.width / 2;
+            offsetY = canvas.height / 2;
+            render();
+        });
+
+        // Toast Dismiss
+        document.getElementById('btnCloseToast').addEventListener('click', () => {
+            pointResultToast.classList.add('opacity-0', 'translate-y-[-10px]');
+            setTimeout(() => pointResultToast.classList.add('hidden'), 300);
+        });
+
+        // Drawer Collapse/Expand Toggle
+        function toggleDrawer(open) {
+            isDrawerOpen = open !== undefined ? open : !isDrawerOpen;
+            const drawerContent = document.getElementById('drawerContent');
+
+            if (isDrawerOpen) {
+                drawerContent.classList.remove('hidden');
+                drawerChevron.style.transform = 'rotate(0deg)';
+                drawerStateText.textContent = 'Chạm để đóng';
+            } else {
+                drawerContent.classList.add('hidden');
+                drawerChevron.style.transform = 'rotate(180deg)';
+                drawerStateText.textContent = 'Chạm để mở';
+            }
+        }
+
+        drawerHandle.addEventListener('click', () => toggleDrawer());
+
+        // Virtual Keypad Actions
+        function toggleKeyboard(show) {
+            if (show) {
+                virtualKeypad.classList.remove('translate-y-full');
+            } else {
+                virtualKeypad.classList.add('translate-y-full');
+            }
+        }
+
+        btnToggleKeyboard.addEventListener('click', () => toggleKeyboard(true));
+        btnCloseKeyboard.addEventListener('click', () => toggleKeyboard(false));
+
+        document.querySelectorAll('.keypad-btn[data-insert]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const text = btn.dataset.insert;
+                const start = inequalityInput.selectionStart;
+                const end = inequalityInput.selectionEnd;
+                const val = inequalityInput.value;
+                inequalityInput.value = val.substring(0, start) + text + val.substring(end);
+                inequalityInput.selectionStart = inequalityInput.selectionEnd = start + text.length;
+                inequalityInput.focus();
+            });
+        });
+
+        document.getElementById('btnKeypadBackspace').addEventListener('click', () => {
+            const start = inequalityInput.selectionStart;
+            const end = inequalityInput.selectionEnd;
+            const val = inequalityInput.value;
+            if (start > 0) {
+                inequalityInput.value = val.substring(0, start - 1) + val.substring(end);
+                inequalityInput.selectionStart = inequalityInput.selectionEnd = start - 1;
+            }
+            inequalityInput.focus();
+        });
+
+        document.getElementById('btnKeypadClear').addEventListener('click', () => {
+            inequalityInput.value = '';
+            inequalityInput.focus();
+        });
+
+        document.getElementById('btnKeypadEnter').addEventListener('click', () => {
+            updateInequalities();
+            toggleKeyboard(false);
+        });
+
+        // Initialization
+        window.onload = () => {
+            resizeCanvas();
+            inequalityInput.value = "2x + y <= 4\nx >= 0\ny >= 0";
+            updateInequalities();
+        };
+    </script>
+</body>
+</html>
